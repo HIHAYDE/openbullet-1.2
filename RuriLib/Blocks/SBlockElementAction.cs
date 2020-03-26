@@ -1,4 +1,6 @@
 ﻿using OpenQA.Selenium;
+using OpenQA.Selenium.Support.UI;
+using RuriLib.Functions.Files;
 using RuriLib.LS;
 using System;
 using System.Collections.Generic;
@@ -53,6 +55,15 @@ namespace RuriLib
 
         /// <summary>Submits a form element.</summary>
         Submit,
+
+        /// <summary>Selects an option from a select element by visible text.</summary>
+        SelectOptionByText,
+
+        /// <summary>Selects an option from a select element by index.</summary>
+        SelectOptionByIndex,
+
+        /// <summary>Selects an option from a select element by value.</summary>
+        SelectOptionByValue,
 
         /// <summary>Gets the text inside an element.</summary>
         GetText,
@@ -159,12 +170,12 @@ namespace RuriLib
                 ElementIndex = LineParser.ParseInt(ref input, "INDEX");
             Action = (ElementAction)LineParser.ParseEnum(ref input, "ACTION", typeof(ElementAction));
 
-            if (input == "") return this;
+            if (input == string.Empty) return this;
             if (LineParser.Lookahead(ref input) == TokenType.Literal)
                 Input = LineParser.ParseLiteral(ref input, "INPUT");
 
             // Try to parse the arrow, otherwise just return the block as is with default var name and var / cap choice
-            if (LineParser.ParseToken(ref input, TokenType.Arrow, false) == "")
+            if (LineParser.ParseToken(ref input, TokenType.Arrow, false) == string.Empty)
                 return this;
 
             // Parse the VAR / CAP
@@ -259,6 +270,18 @@ namespace RuriLib
                         UpdateSeleniumData(data);
                         break;
 
+                    case ElementAction.SelectOptionByText:
+                        new SelectElement(element).SelectByText(ReplaceValues(input, data));
+                        break;
+
+                    case ElementAction.SelectOptionByIndex:
+                        new SelectElement(element).SelectByIndex(int.Parse(ReplaceValues(input, data)));
+                        break;
+
+                    case ElementAction.SelectOptionByValue:
+                        new SelectElement(element).SelectByValue(ReplaceValues(input, data));
+                        break;
+
                     case ElementAction.GetText:
                         if (recursive) foreach (var elem in elements) outputs.Add(elem.Text);
                         else outputs.Add(element.Text);
@@ -299,7 +322,7 @@ namespace RuriLib
 
                     case ElementAction.Screenshot:
                         var image = GetElementScreenShot(data.Driver, element);
-                        SaveScreenshot(image, data);
+                        Files.SaveScreenshot(image, data);
                         break;
 
                     case ElementAction.SwitchToFrame:
@@ -341,7 +364,7 @@ namespace RuriLib
 
             if (outputs.Count != 0)
             {
-                InsertVariables(data, isCapture, recursive, outputs, outputVariable, "", "");
+                InsertVariable(data, isCapture, recursive, outputs, outputVariable, "", "", false, true);
             }
         }
 

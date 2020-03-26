@@ -1,13 +1,17 @@
-﻿namespace RuriLib.ViewModels
+﻿using RuriLib.CaptchaServices;
+using System.Collections.Generic;
+using System.Reflection;
+
+namespace RuriLib.ViewModels
 {
     /// <summary>
     /// Provides captcha-related settings.
     /// </summary>
     public class SettingsCaptchas : ViewModelBase
     {
-        private BlockCaptcha.CaptchaService currentService = BlockCaptcha.CaptchaService.AntiCaptcha;
+        private ServiceType currentService = ServiceType.AntiCaptcha;
         /// <summary>Which Captcha Service is currently selected for solving captcha challenges.</summary>
-        public BlockCaptcha.CaptchaService CurrentService { get { return currentService; } set { currentService = value; OnPropertyChanged(); } }
+        public ServiceType CurrentService { get { return currentService; } set { currentService = value; OnPropertyChanged(); } }
 
         private string antiCapToken = "";
         /// <summary>The AntiCaptcha API Token.</summary>
@@ -28,6 +32,10 @@
         private string twoCapToken = "";
         /// <summary>The TwoCaptcha API Token.</summary>
         public string TwoCapToken { get { return twoCapToken; } set { twoCapToken = value; OnPropertyChanged(); } }
+
+        private string ruCapToken = "";
+        /// <summary>The RuCaptcha API Token.</summary>
+        public string RuCapToken { get { return ruCapToken; } set { ruCapToken = value; OnPropertyChanged(); } }
 
         private string dcUser = "";
         /// <summary>The DeCaptcher Username.</summary>
@@ -57,6 +65,18 @@
         /// <summary>The CaptchaDecoder API Token.</summary>
         public string CDToken { get { return cdToken; } set { cdToken = value; OnPropertyChanged(); } }
 
+        private string customTwoCapToken = "";
+        /// <summary>The custom 2Captcha API Token.</summary>
+        public string CustomTwoCapToken { get { return customTwoCapToken; } set { customTwoCapToken = value; OnPropertyChanged(); } }
+
+        private string customTwoCapDomain = "example.com";
+        /// <summary>The custom 2Captcha server's domain.</summary>
+        public string CustomTwoCapDomain { get { return customTwoCapDomain; } set { customTwoCapDomain = value; OnPropertyChanged(); } }
+
+        private int customTwoCapPort = 80;
+        /// <summary>The custom 2Captcha server's port.</summary>
+        public int CustomTwoCapPort { get { return customTwoCapPort; } set { customTwoCapPort = value; OnPropertyChanged(); } }
+
         private bool bypassBalanceCheck = false;
         /// <summary>Whether to bypass the balance check before solving a captcha challenge.</summary>
         public bool BypassBalanceCheck { get { return bypassBalanceCheck; } set { bypassBalanceCheck = value; OnPropertyChanged(); } }
@@ -64,5 +84,19 @@
         private int timeout = 120;
         /// <summary>The maximum amount of time to wait until a captcha challenge is solved.</summary>
         public int Timeout { get { return timeout; } set { timeout = value; OnPropertyChanged(); } }
+
+        /// <summary>
+        /// Resets the properties to their default value.
+        /// </summary>
+        public void Reset()
+        {
+            SettingsCaptchas def = new SettingsCaptchas();
+            IList<PropertyInfo> props = new List<PropertyInfo>(typeof(SettingsCaptchas).GetProperties());
+
+            foreach (PropertyInfo prop in props)
+            {
+                prop.SetValue(this, prop.GetValue(def, null));
+            }
+        }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using Extreme.Net;
 using Newtonsoft.Json;
+using RuriLib.Functions.Requests;
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
@@ -46,17 +47,28 @@ namespace RuriLib.CaptchaServices
             // Create task
             HttpRequest request = new HttpRequest();
             request.AddHeader(HttpHeader.Accept, "application/json");
-            var content = new Extreme.Net.MultipartContent(BlockRequest.GenerateMultipartBoundary());
+            var content = new Extreme.Net.MultipartContent(Request.GenerateMultipartBoundary());
             content.Add(new Extreme.Net.StringContent(User), "username");
             content.Add(new Extreme.Net.StringContent(Pass), "password");
             content.Add(new Extreme.Net.StringContent("4"), "type");
             content.Add(new Extreme.Net.StringContent(JsonConvert.SerializeObject(new CreateRecaptchaTaskRequest(siteUrl, siteKey))), "token_params");
             var response = request.Post("http://api.dbcapi.me/api/captcha", content).ToString();
-            var split = response.Split('&');
-            var status = int.Parse(split[0].Split('=')[1]);
-            var id = split[1].Split('=')[1];
-            if (status == 255) throw new Exception(response);
-            TaskId = id;
+
+            // Sometimes the DBC API replies without JSON even when the Accept header is set correctly, so we must perform a check
+            if (response.Trim().StartsWith("{"))
+            {
+                var taskResponse = JsonConvert.DeserializeObject<CreateTaskResponse>(response);
+                if (taskResponse.status == 255) throw new Exception(taskResponse.error);
+                TaskId = taskResponse.captcha;
+            }
+            else // Not JSON
+            {
+                var split = response.Split('&');
+                var status = int.Parse(split[0].Split('=')[1]);
+                var id = split[1].Split('=')[1];
+                if (status == 255) throw new Exception(response);
+                TaskId = id;
+            }
             Status = CaptchaStatus.Processing;
 
             // Check if task has been completed
@@ -71,7 +83,7 @@ namespace RuriLib.CaptchaServices
                 CreateTaskResponse gtrr = JsonConvert.DeserializeObject<CreateTaskResponse>(resp);
                 if (gtrr == null) continue;
                 if (!gtrr.is_correct) throw new Exception("No answer could be found");
-                if (gtrr.text != "")
+                if (gtrr.text != string.Empty)
                 {
                     Status = CaptchaStatus.Completed;
                     return gtrr.text;
@@ -86,16 +98,27 @@ namespace RuriLib.CaptchaServices
             // Create task
             HttpRequest request = new HttpRequest();
             request.AddHeader(HttpHeader.Accept, "application/json");
-            Extreme.Net.MultipartContent content = new Extreme.Net.MultipartContent(BlockRequest.GenerateMultipartBoundary());
+            Extreme.Net.MultipartContent content = new Extreme.Net.MultipartContent(Request.GenerateMultipartBoundary());
             content.Add(new Extreme.Net.StringContent(User), "username");
             content.Add(new Extreme.Net.StringContent(Pass), "password");
             content.Add(new Extreme.Net.StringContent($"base64:{GetBase64(bitmap, ImageFormat.Jpeg)}"), "captchafile");
             var response = request.Post("http://api.dbcapi.me/api/captcha", content).ToString();
-            var split = response.Split('&');
-            var status = int.Parse(split[0].Split('=')[1]);
-            var id = split[1].Split('=')[1];
-            if (status == 255) throw new Exception(response);
-            TaskId = id;
+
+            // Sometimes the DBC API replies without JSON even when the Accept header is set correctly, so we must perform a check
+            if (response.Trim().StartsWith("{"))
+            {
+                var taskResponse = JsonConvert.DeserializeObject<CreateTaskResponse>(response);
+                if (taskResponse.status == 255) throw new Exception(taskResponse.error);
+                TaskId = taskResponse.captcha;
+            }
+            else // Not JSON
+            {
+                var split = response.Split('&');
+                var status = int.Parse(split[0].Split('=')[1]);
+                var id = split[1].Split('=')[1];
+                if (status == 255) throw new Exception(response);
+                TaskId = id;
+            }
             Status = CaptchaStatus.Processing;
 
             // Check if task has been completed
@@ -110,7 +133,7 @@ namespace RuriLib.CaptchaServices
                 CreateTaskResponse gtrr = JsonConvert.DeserializeObject<CreateTaskResponse>(resp);
                 if (gtrr == null) continue;
                 if (!gtrr.is_correct) throw new Exception("No answer could be found");
-                if (gtrr.text != "")
+                if (gtrr.text != string.Empty)
                 {
                     Status = CaptchaStatus.Completed;
                     return gtrr.text;

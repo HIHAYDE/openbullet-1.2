@@ -49,7 +49,7 @@ namespace RuriLib
             Url = LineParser.ParseLiteral(ref input, "URL");
             SiteKey = LineParser.ParseLiteral(ref input, "SITEKEY");
 
-            if (LineParser.ParseToken(ref input, TokenType.Arrow, false) == "")
+            if (LineParser.ParseToken(ref input, TokenType.Arrow, false) == string.Empty)
                 return this;
 
             LineParser.EnsureIdentifier(ref input, "VAR");
@@ -83,50 +83,10 @@ namespace RuriLib
 
             data.Log(new LogEntry("Solving reCaptcha...", Colors.White));
 
-            string recapResponse = "";
-            CaptchaServices.CaptchaService service = null;
+            string recapResponse = Service.Initialize(data.GlobalSettings.Captchas).SolveRecaptcha(siteKey, ReplaceValues(url, data));
 
-            switch (data.GlobalSettings.Captchas.CurrentService)
-            {
-                case CaptchaService.ImageTypers:
-                    service = new ImageTyperz(data.GlobalSettings.Captchas.ImageTypToken, data.GlobalSettings.Captchas.Timeout);
-                    break;
-
-                case CaptchaService.AntiCaptcha:
-                    service = new AntiCaptcha(data.GlobalSettings.Captchas.AntiCapToken, data.GlobalSettings.Captchas.Timeout);
-                    break;
-
-                case CaptchaService.DBC:
-                    service = new DeathByCaptcha(data.GlobalSettings.Captchas.DBCUser, data.GlobalSettings.Captchas.DBCPass, data.GlobalSettings.Captchas.Timeout);
-                    break;
-
-                case CaptchaService.TwoCaptcha:
-                    service = new TwoCaptcha(data.GlobalSettings.Captchas.TwoCapToken, data.GlobalSettings.Captchas.Timeout);
-                    break;
-
-                case CaptchaService.DeCaptcher:
-                    service = new DeCaptcher(data.GlobalSettings.Captchas.DCUser, data.GlobalSettings.Captchas.DCPass, data.GlobalSettings.Captchas.Timeout);
-                    break;
-
-                case CaptchaService.AZCaptcha:
-                    service = new AZCaptcha(data.GlobalSettings.Captchas.AZCapToken, data.GlobalSettings.Captchas.Timeout);
-                    break;
-
-                case CaptchaService.SolveRecaptcha:
-                    service = new SolveReCaptcha(data.GlobalSettings.Captchas.SRUserId, data.GlobalSettings.Captchas.SRToken, data.GlobalSettings.Captchas.Timeout);
-                    break;
-
-                case CaptchaService.CaptchasIO:
-                    service = new CaptchasIO(data.GlobalSettings.Captchas.CIOToken, data.GlobalSettings.Captchas.Timeout);
-                    break;
-
-                default:
-                    throw new Exception("This service cannot solve reCaptchas!");
-            }
-            recapResponse = service.SolveRecaptcha(siteKey, ReplaceValues(url, data));
-
-            data.Log(recapResponse == "" ? new LogEntry("Couldn't get a reCaptcha response from the service", Colors.Tomato) : new LogEntry("Succesfully got the response: " + recapResponse, Colors.GreenYellow));
-            if (VariableName != "")
+            data.Log(recapResponse == string.Empty ? new LogEntry("Couldn't get a reCaptcha response from the service", Colors.Tomato) : new LogEntry("Succesfully got the response: " + recapResponse, Colors.GreenYellow));
+            if (VariableName != string.Empty)
             {
                 data.Log(new LogEntry("Response stored in variable: " + variableName, Colors.White));
                 data.Variables.Set(new CVar(variableName, recapResponse));

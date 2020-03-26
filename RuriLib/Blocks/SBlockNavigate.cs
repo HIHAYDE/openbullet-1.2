@@ -41,12 +41,14 @@ namespace RuriLib
 
             /*
              * Syntax:
-             * NAVIGATE "URL" TIMEOUT
+             * NAVIGATE "URL" [TIMEOUT] [BanOnTimeout?]
              * */
 
             Url = LineParser.ParseLiteral(ref input, "URL");
             if (LineParser.Lookahead(ref input) == TokenType.Integer)
                 Timeout = LineParser.ParseInt(ref input, "TIMEOUT");
+            if (LineParser.Lookahead(ref input) == TokenType.Boolean)
+                LineParser.SetBool(ref input, this);
 
             return this;
         }
@@ -59,7 +61,8 @@ namespace RuriLib
                 .Label(Label)
                 .Token("NAVIGATE")
                 .Literal(Url)
-                .Integer(Timeout, "Timeout");
+                .Integer(Timeout, "Timeout")
+                .Boolean(BanOnTimeout, "BanOnTimeout");
             return writer.ToString();
         }
 
@@ -85,8 +88,11 @@ namespace RuriLib
             catch (OpenQA.Selenium.WebDriverTimeoutException)
             {
                 data.Log(new LogEntry("Timeout on Page Load", Colors.Tomato));
+
                 if (BanOnTimeout)
+                {
                     data.Status = BotStatus.BAN;
+                }
             }
 
             data.Driver.Manage().Timeouts().PageLoad = TimeSpan.FromSeconds(data.GlobalSettings.Selenium.PageLoadTimeout);

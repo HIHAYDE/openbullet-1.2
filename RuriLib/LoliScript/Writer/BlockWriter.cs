@@ -40,7 +40,7 @@ namespace RuriLib.LS
         /// <returns>The BlockWriter itself</returns>
         public BlockWriter Token(dynamic token, string property = "")
         {
-            if (property != "" && CheckDefault(token, property)) return this;
+            if (property != string.Empty && CheckDefault(token, property)) return this;
             Write($"{token.ToString()} ");
             return this;
         }
@@ -53,7 +53,7 @@ namespace RuriLib.LS
         /// <returns>The BlockWriter itself</returns>
         public BlockWriter Integer(int integer, string property = "")
         {
-            if (property != "" && CheckDefault(integer, property)) return this;
+            if (property != string.Empty && CheckDefault(integer, property)) return this;
             Write($"{integer} ");
             return this;
         }
@@ -63,11 +63,12 @@ namespace RuriLib.LS
         /// </summary>
         /// <param name="literal">The literal value to write</param>
         /// <param name="property">The name of the property of the block. If the value is the default one, it will not be written. Do not set this parameter to always write the variable.</param>
+        /// <param name="alwaysWrite">Always write the value even if that value is default</param>
         /// <returns>The BlockWriter itself</returns>
-        public BlockWriter Literal(string literal, string property = "")
+        public BlockWriter Literal(string literal, string property = "", bool alwaysWrite = false)
         {
-            if (property != "" && CheckDefault(literal, property)) return this;
-            Write($"\"{literal.Replace("\"", "\\\"")}\" ");
+            if (property != string.Empty && (!alwaysWrite && CheckDefault(literal, property))) return this;
+            Write($"\"{literal.Replace("\\", "\\\\").Replace("\"", "\\\"")}\" ");
             return this;
         }        
 
@@ -101,7 +102,7 @@ namespace RuriLib.LS
         /// <returns></returns>
         public BlockWriter Boolean(bool boolean, string property)
         {
-            if (property != "" && CheckDefault(boolean, property)) return this;
+            if (property != string.Empty && CheckDefault(boolean, property)) return this;
             Write($"{property}={boolean.ToString().ToUpper()} ");
             return this;
         }

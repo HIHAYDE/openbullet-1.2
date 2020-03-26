@@ -2,6 +2,7 @@
 using IronPython.Hosting;
 using IronPython.Runtime;
 using Jint;
+using RuriLib.Functions.Conditions;
 using RuriLib.Models;
 using System;
 using System.Collections.Generic;
@@ -74,6 +75,27 @@ namespace RuriLib.LS
 
         /// <summary>The current line being processed.</summary>
         public string CurrentLine { get; set; } = "";
+
+        /// <summary>The next block to be processed. Empty if the script has no more blocks to execute.</summary>
+        public string NextBlock
+        {
+            get
+            {
+                for (int j = i; j < lines.Count(); j++)
+                {
+                    var line = lines[j];
+                    if (IsEmptyOrCommentOrDisabled(line) || !BlockParser.IsBlock(line)) continue;
+
+                    var label = "";
+                    if (lines[j].StartsWith("#")) label = LineParser.ParseLabel(ref line);
+                    var blockName = LineParser.ParseToken(ref line, TokenType.Parameter, false, false);
+
+                    if (label != string.Empty) return $"{blockName} ({label})";
+                    else return blockName;
+                }
+                return "";
+            }
+        }
 
         /// <summary>The current block being processed.</summary>
         public string CurrentBlock { get; set; } = "";
@@ -193,7 +215,10 @@ namespace RuriLib.LS
             // Clean the inner Log
             data.LogBuffer.Clear();
 
-            if (data.Status != BotStatus.NONE && data.Status != BotStatus.SUCCESS)
+            // TODO: Refactor this with a properly written policy
+            // If we have a custom status without forced continue OR we have a status that is not NONE or SUCCESS or CUSTOM
+            if ((data.Status == BotStatus.CUSTOM && !data.ConfigSettings.ContinueOnCustom) ||
+                (data.Status != BotStatus.NONE && data.Status != BotStatus.SUCCESS && data.Status != BotStatus.CUSTOM))
             {
                 i = lines.Count(); // Go to the end
                 return;
@@ -229,18 +254,30 @@ namespace RuriLib.LS
                 // If Block -> Process Block
                 if (BlockParser.IsBlock(CurrentLine))
                 {
+                    BlockBase block = null;
                     try
                     {
-                        var block = BlockParser.Parse(CurrentLine);
+                        block = BlockParser.Parse(CurrentLine);
                         CurrentBlock = block.Label;
                         if (!block.Disabled)
                             block.Process(data);
                     }
                     catch (Exception ex)
                     {
+                        // We log the error message
                         data.LogBuffer.Add(new LogEntry("ERROR: " + ex.Message, Colors.Tomato));
-                        data.Status = BotStatus.ERROR;
-                        throw new BlockProcessingException(ex.Message);
+                        
+                        // Stop the execution only if the block is vital for the execution of the script (requests)
+                        // This way we prevent the interruption of the script and an endless retry cycle e.g. if we fail to parse a response given a specific input
+                        if (block != null && (
+                            block.GetType() == typeof(BlockRequest) ||
+                            block.GetType() == typeof(BlockBypassCF) ||
+                            block.GetType() == typeof(BlockImageCaptcha) ||
+                            block.GetType() == typeof(BlockRecaptcha)))
+                        {
+                            data.Status = BotStatus.ERROR;
+                            throw new BlockProcessingException(ex.Message);
+                        }
                     }
                 }
 
@@ -304,8 +341,8 @@ namespace RuriLib.LS
                             try
                             {
                                 label = LineParser.ParseToken(ref cfLine, TokenType.Label, true);
-                                i = ScanFor(lines, 0, true, new string[] { $"{label}" }) - 1;
-                                data.LogBuffer.Add(new LogEntry($"Jumping to line {i + 1}", Colors.White));
+                                i = ScanFor(lines, -1, true, new string[] { $"{label}" }) - 1;
+                                data.LogBuffer.Add(new LogEntry($"Jumping to line {i + 2}", Colors.White));
                             }
                             catch { throw new Exception($"No block with label {label} was found"); }
                             break;
@@ -325,7 +362,7 @@ namespace RuriLib.LS
 
                                     otherScript = string.Join(Environment.NewLine, lines.Skip(i + 1).Take(end - i));
                                     i = end;
-                                    data.LogBuffer.Add(new LogEntry($"Jumping to line {i + 1}", Colors.White));
+                                    data.LogBuffer.Add(new LogEntry($"Jumping to line {i + 2}", Colors.White));
                                     break;
                             }
                             break;
@@ -341,7 +378,7 @@ namespace RuriLib.LS
 
                                     try
                                     {
-                                        if (otherScript != "") RunScript(otherScript, language, outputs, data);
+                                        if (otherScript != string.Empty) RunScript(otherScript, language, outputs, data);
                                     }
                                     catch (Exception ex) { data.LogBuffer.Add(new LogEntry($"The script failed to be executed: {ex.Message}", Colors.Tomato)); }
                                     break;
@@ -366,7 +403,7 @@ namespace RuriLib.LS
         /// <returns>Whether the line needs to be skipped</returns>
         private static bool IsEmptyOrCommentOrDisabled(string line)
         {
-            try { return line.Trim() == "" || line.StartsWith("##") || line.StartsWith("!"); }
+            try { return line.Trim() == string.Empty || line.StartsWith("##") || line.StartsWith("!"); }
             catch { return true; }
         }
 
@@ -412,11 +449,11 @@ namespace RuriLib.LS
         public static bool ParseCheckCondition(ref string cfLine, BotData data)
         {
             var first = LineParser.ParseLiteral(ref cfLine, "STRING");
-            var condition = (Condition)LineParser.ParseEnum(ref cfLine, "CONDITION", typeof(Condition));
+            var Comparer = (Comparer)LineParser.ParseEnum(ref cfLine, "Comparer", typeof(Comparer));
             var second = "";
-            if (condition != Condition.Exists)
+            if (Comparer != Comparer.Exists && Comparer != Comparer.DoesNotExist)
                 second = LineParser.ParseLiteral(ref cfLine, "STRING");
-            return (ConditionChecker.Verify(first, condition, second, data));
+            return (Condition.ReplaceAndVerify(first, Comparer, second, data));
         }
 
         /// <summary>
@@ -435,7 +472,7 @@ namespace RuriLib.LS
 
             // Parse variables to get out
             List<string> outVarList = new List<string>();
-            if (outputs != "")
+            if (outputs != string.Empty)
             {
                 try { outVarList = outputs.Split(',').Select(x => x.Trim()).ToList(); }
                 catch { }
@@ -455,7 +492,20 @@ namespace RuriLib.LS
                         // Add in all the variables
                         foreach (var variable in data.Variables.All)
                         {
-                            try { jsengine.SetValue(variable.Name, variable.Value); } catch { }
+                            try
+                            {
+                                switch (variable.Type)
+                                {
+                                    case CVar.VarType.List:
+                                        jsengine.SetValue(variable.Name, (variable.Value as List<string>).ToArray());
+                                        break;
+
+                                    default:
+                                        jsengine.SetValue(variable.Name, variable.Value);
+                                        break;
+                                }
+                            }
+                            catch { }
                         }
 
                         // Execute JS
